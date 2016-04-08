@@ -31,6 +31,75 @@ from simulator import Simulator
 # 6. reward 	== integer value
 # 7. timer      == integer value
 
+# GRID:
+# 8 across X 6 down
+
+"""
+ 1. The idea here is that the agent should learn to follow the next_waypoint 
+    whenever traffic allows it to, without you telling it anything about how 
+    the traffic laws work.
+ 2. Write some methods to keep track of the agent's performance
+"""
+
+"""
+ Q-learning method 1:
+1) Sense the environment (see what changes naturally occur in the environment)
+2) Take an action - get a reward
+3) Sense the environment (see what changes the action has on the environment)
+4) Update the Q-table
+5) Repeat 
+
+Q-learning method 2:
+1) Sense the environment (see what changes occur naturally in the environment) - store it as state 0
+2) Take an action/reward - store as action 0 & reward 0
+
+In the next iteration
+1) Sense environment (see what changes occur naturally and from an action)
+2) Update the Q-table
+3) Take an action - get a reward
+4) Repeat
+"""
+
+"""
+ 1. If the light is "red", and the planner tell you to go 'forward', and deadline= 10, what should the agent do? 
+   (stop and wait for the light to turn 'green' for example, because in the past it received -1 when trying to run the red light)
+ 2. If the light is 'green', and the planner recommends you to go 'forward', what should be the optimum action?
+    (well, go 'forward')
+ 3. etc...
+The agent should learn from the rewards it received in the past and figure out the best way to act (and thus get maximum reward) 
+if the same situation happens again.
+"""
+
+"""
+For each of those pieces of information about the state, think about how many different values there are. 
+Again, try thinking about how often the agent will visit each state--it'll need to visit each state more than four times in order 
+to learn the relative value of each action
+"""
+
+"""
+action = random.choice(possibledirections)
+
+# Execute action and get reward
+reward = self.env.act(self, action)
+"""
+
+"""
+Explore more at beginning
+Exploit more near end
+
+ 1. Make very optimistic assumptions about the result of taking an action you haven't tried yet. 
+    (For example, initialize all "unknown" Q values to something higher than the highest cumulative reward your cab could earn in reality.)
+ 2. Decay epsilon over time, so that initial action selection is more random and eventual action selection is closer to optimal.
+ 3. If you decay epsilon, you can scale it by a constant (0 < c < 1)
+"""
+
+"""
+This refers to the agent's internal state, not what information the environment has about it. If you update self.state there, 
+it'll be shown in the GUI screen.
+
+E.g.:
+self.state = "Foo"
+"""
 
 class LearningAgent(Agent):
 	"""An agent that learns to drive in the smartcab world."""
@@ -40,7 +109,6 @@ class LearningAgent(Agent):
 		self.color = 'red'  								# override color
 		self.planner = RoutePlanner(self.env, self)  		# simple route planner to get next_waypoint
         # TODO: Initialize any additional variables here
-		light,oncoming,right,left,choice = 0,0,0,0,0
 		
 	def reset(self, destination=None):
 		self.planner.route_to(destination)
@@ -52,8 +120,11 @@ class LearningAgent(Agent):
 		self.next_waypoint = self.planner.next_waypoint()  	# from route planner, also displayed by simulator
 		inputs = self.env.sense(self)
 		deadline = self.env.get_deadline(self)
+		print self.next_waypoint
 
         # TODO: Update state
+		S = [('light',input[0]),('oncoming',input[1]),('right',input[2]),('left',input[3]),('next_waypoint',self.next_waypoint),('deadline',deadline)]
+		
 		light = inputs['light']
 		oncoming = inputs['oncoming']
 		right = inputs['right']
@@ -65,7 +136,8 @@ class LearningAgent(Agent):
 				choice = random.choice(valid_actions[1:])
 			else:
 				if oncoming == 'right':
-					choice = random.choice(valid_actions[0])
+					valid_actions = [None, 'right']
+					choice = random.choice(valid_actions[:])
 				else:
 					valid_actions = [None,'straight','right']
 					choice = random.choice(valid_actions[:])
