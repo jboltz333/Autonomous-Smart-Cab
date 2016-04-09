@@ -120,43 +120,38 @@ class LearningAgent(Agent):
 		self.next_waypoint = self.planner.next_waypoint()  	# from route planner, also displayed by simulator
 		inputs = self.env.sense(self)
 		deadline = self.env.get_deadline(self)
-		print self.next_waypoint
 
         # TODO: Update state
-		S = [('light',input[0]),('oncoming',input[1]),('right',input[2]),('left',input[3]),('next_waypoint',self.next_waypoint),('deadline',deadline)]
-		
-		light = inputs['light']
-		oncoming = inputs['oncoming']
-		right = inputs['right']
-		left = inputs['left']
+		updated = self.update_state(self.next_waypoint, inputs, deadline)
+
 		valid_actions = [None, 'forward', 'left', 'right']
-		
-		if light == 'green':
-			if oncoming == None:
-				choice = random.choice(valid_actions[1:])
-			else:
-				if oncoming == 'right':
-					valid_actions = [None, 'right']
-					choice = random.choice(valid_actions[:])
-				else:
-					valid_actions = [None,'straight','right']
-					choice = random.choice(valid_actions[:])
-		else:
-			if left == 'straight':
-				choice = random.choice(valid_actions[0])
-			else:
-				valid_actions = [None,'right']
-				choice = random.choice(valid_actions[:])
+		choice = random.choice(valid_actions[:])
 				
-		
         # TODO: Select action according to your policy
 		action = choice
 
         # Execute action and get reward
 		reward = self.env.act(self, action)
-
-        # TODO: Learn policy based on state, action, reward
+		
+		# TODO: Learn policy based on state, action, reward
 		print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
+		
+	def update_state(self, self.next_waypoint, inputs, deadline):
+		left = inputs['left']
+		oncoming = inputs['oncoming']
+		light = inputs['light']
+		
+		if deadline <= 10:
+			anarchytime = True
+		else:
+			anarchytime = False
+		
+		if left != 'straight':
+			left = False 
+		else:
+			left = True
+		
+		state = [light, oncoming, left, self.next_waypoint, anarchytime]
 
 
 def run():
