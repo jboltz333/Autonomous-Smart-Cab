@@ -3,15 +3,6 @@ from environment import Agent, Environment
 from planner import RoutePlanner
 from simulator import Simulator
 
-
-# PROCESSES:
-# 1. Next waypoint location, relative to current location and heading
-# 2. Intersection state(traffic light and presence of cars)
-# 3. Current deadline value(time steps remaining)
-# 4. And produces some random move/action
-# 5. If enforce_deadline set to False, you have unlimited time
-# 6. Current state/action taken and reward/penalty earned shown in simulator
-
 # RULES:
 # 1. No stopping at green unless have to
 # 2. As you get closer, more reward (closer == distance)
@@ -20,19 +11,21 @@ from simulator import Simulator
 # 5. Reward for successful right on red
 # 6. Reward for successful left on green
 
-# INPUTS:
-# 1. light 		== red/green
-# 2. oncoming 	== none/right/left/straight
-# 3. left 		== none/right/left/straight
-# 4. right 		== none/right/left/straight
+# Take action
+# Recieve immediate reward
+# Observe new state
+# Update table entry for Q^(s,a) as follows:
+# Q(s,a) = r + & * max@' * Q^(s',a')
+# s = s'
 
-# OUTPUTS:
-# 5. action 	== none/right/left/straight
-# 6. reward 	== integer value
-# 7. timer      == integer value
-
-# GRID:
-# 8 across X 6 down
+#   EXAMPLE: 
+# Set all states to 0
+# Available actions: a12, a14 Chose a12
+# reward = 1
+# Available actions: a21, a25, a23 Update Q(s1, a12): Q(s1, a12) = r + .5 * max(Q(s2,a21), Q(s2,a25), Q(s2,a23)) = 1
+# Available actions: a21, a25, a23 Chose a23
+# reward = 1
+# Available actions: a32, a36 Update Q(s1, a12): Q(s2, a23) = r + .5 * max(Q(s3,a32), Q(s3,a36)) = 1	
 
 """
  1. The idea here is that the agent should learn to follow the next_waypoint 
@@ -40,7 +33,15 @@ from simulator import Simulator
     the traffic laws work.
  2. Write some methods to keep track of the agent's performance
 """
+"""
+Explore more at beginning
+Exploit more near end
 
+ 1. Make very optimistic assumptions about the result of taking an action you haven't tried yet. 
+    (For example, initialize all "unknown" Q values to something higher than the highest cumulative reward your cab could earn in reality.)
+ 2. Decay epsilon over time, so that initial action selection is more random and eventual action selection is closer to optimal.
+ 3. If you decay epsilon, you can scale it by a constant (0 < c < 1)
+"""
 """
  Q-learning method 1:
 1) Sense the environment (see what changes naturally occur in the environment)
@@ -60,55 +61,17 @@ In the next iteration
 4) Repeat
 """
 
-"""
- 1. If the light is "red", and the planner tell you to go 'forward', and deadline= 10, what should the agent do? 
-   (stop and wait for the light to turn 'green' for example, because in the past it received -1 when trying to run the red light)
- 2. If the light is 'green', and the planner recommends you to go 'forward', what should be the optimum action?
-    (well, go 'forward')
- 3. etc...
-The agent should learn from the rewards it received in the past and figure out the best way to act (and thus get maximum reward) 
-if the same situation happens again.
-"""
-
-"""
-For each of those pieces of information about the state, think about how many different values there are. 
-Again, try thinking about how often the agent will visit each state--it'll need to visit each state more than four times in order 
-to learn the relative value of each action
-"""
-
-"""
-action = random.choice(possibledirections)
-
-# Execute action and get reward
-reward = self.env.act(self, action)
-"""
-
-"""
-Explore more at beginning
-Exploit more near end
-
- 1. Make very optimistic assumptions about the result of taking an action you haven't tried yet. 
-    (For example, initialize all "unknown" Q values to something higher than the highest cumulative reward your cab could earn in reality.)
- 2. Decay epsilon over time, so that initial action selection is more random and eventual action selection is closer to optimal.
- 3. If you decay epsilon, you can scale it by a constant (0 < c < 1)
-"""
-
-"""
-This refers to the agent's internal state, not what information the environment has about it. If you update self.state there, 
-it'll be shown in the GUI screen.
-
-E.g.:
-self.state = "Foo"
-"""
-
 class LearningAgent(Agent):
 	"""An agent that learns to drive in the smartcab world."""
 
+	counter = 0
+	
 	def __init__(self, env):
 		super(LearningAgent, self).__init__(env)  			# sets self.env = env, state = None, next_waypoint = None, and a default color
 		self.color = 'red'  								# override color
 		self.planner = RoutePlanner(self.env, self)  		# simple route planner to get next_waypoint
         # TODO: Initialize any additional variables here
+		self.counter = 0
 		
 	def reset(self, destination=None):
 		self.planner.route_to(destination)
@@ -122,11 +85,14 @@ class LearningAgent(Agent):
 		deadline = self.env.get_deadline(self)
 
         # TODO: Update state
+		if self.counter == 0:
+			# Initialize q-value table
+			self.counter = 1
+		
 		updated = self.update_state(self.next_waypoint, inputs, deadline)
-
-		valid_actions = [None, 'forward', 'left', 'right']
-		choice = random.choice(valid_actions[:])
-				
+		
+		choice = self.lookup_actions(updated)
+		
         # TODO: Select action according to your policy
 		action = choice
 
@@ -136,22 +102,49 @@ class LearningAgent(Agent):
 		# TODO: Learn policy based on state, action, reward
 		print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
 		
-	def update_state(self, self.next_waypoint, inputs, deadline):
+		self.update_policy(updated, action, reward)
+		
+		
+	def update_state(self, next_waypoint, inputs, deadline):
 		left = inputs['left']
 		oncoming = inputs['oncoming']
+		right = inputs['right']
 		light = inputs['light']
 		
+		if right == None and left == None:
+			cross_traffic = False
+		else:
+			cross_traffic = True
+		
 		if deadline <= 10:
-			anarchytime = True
+			anarchy_time = True
 		else:
-			anarchytime = False
+			anarchy_time = False
 		
-		if left != 'straight':
-			left = False 
-		else:
-			left = True
+		state = [light, oncoming, cross_traffic, next_waypoint, anarchy_time]
 		
-		state = [light, oncoming, left, self.next_waypoint, anarchytime]
+		return updated_state
+		
+		
+	def lookup_actions(self, state):
+			
+		light = state[0]
+		oncoming = state[1]
+		cross_traffic = state[2]
+		next_waypoint = state[3]
+		anarchy_time = state[4]
+			
+		tuple_state = (('light': light), ('oncoming': oncoming), ('cross_traffic': cross_traffic), 
+				       ('next_waypoint': next_waypoint), ('anarchy_time': anarchy_time))
+					  
+		q_vals = self.q_values(tuple_state)			  
+		
+			
+	def update_policy(self, state, action, reward):
+		# ...
+	
+	def q_values(self, state, action=None):
+		# ...
 
 
 def run():
@@ -163,7 +156,7 @@ def run():
     e.set_primary_agent(a, enforce_deadline=True)  		# set agent to track
 
     # Now simulate it
-    sim = Simulator(e, update_delay=2.0)  				# reduce update_delay to speed up simulation
+    sim = Simulator(e, update_delay=0.3)  				# reduce update_delay to speed up simulation
     sim.run(n_trials=10)  								# press Esc or close pygame window to quit
 
 
