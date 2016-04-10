@@ -3,75 +3,19 @@ from environment import Agent, Environment
 from planner import RoutePlanner
 from simulator import Simulator
 
-# RULES:
-# 1. No stopping at green unless have to
-# 2. As you get closer, more reward (closer == distance)
-# 3. Higher penalty as steps increase
-# 4. High penalty for accident
-# 5. Reward for successful right on red
-# 6. Reward for successful left on green
-
-# Take action
-# Recieve immediate reward
-# Observe new state
-# Update table entry for Q^(s,a) as follows:
-# Q(s,a) = r + & * max@' * Q^(s',a')
-# s = s'
-
-#   EXAMPLE: 
-# Set all states to 0
-# Available actions: a12, a14 Chose a12
-# reward = 1
-# Available actions: a21, a25, a23 Update Q(s1, a12): Q(s1, a12) = r + .5 * max(Q(s2,a21), Q(s2,a25), Q(s2,a23)) = 1
-# Available actions: a21, a25, a23 Chose a23
-# reward = 1
-# Available actions: a32, a36 Update Q(s1, a12): Q(s2, a23) = r + .5 * max(Q(s3,a32), Q(s3,a36)) = 1	
-
-"""
- 1. The idea here is that the agent should learn to follow the next_waypoint 
-    whenever traffic allows it to, without you telling it anything about how 
-    the traffic laws work.
- 2. Write some methods to keep track of the agent's performance
-"""
-"""
-Explore more at beginning
-Exploit more near end
-
- 1. Make very optimistic assumptions about the result of taking an action you haven't tried yet. 
-    (For example, initialize all "unknown" Q values to something higher than the highest cumulative reward your cab could earn in reality.)
- 2. Decay epsilon over time, so that initial action selection is more random and eventual action selection is closer to optimal.
- 3. If you decay epsilon, you can scale it by a constant (0 < c < 1)
-"""
-"""
- Q-learning method 1:
-1) Sense the environment (see what changes naturally occur in the environment)
-2) Take an action - get a reward
-3) Sense the environment (see what changes the action has on the environment)
-4) Update the Q-table
-5) Repeat 
-
-Q-learning method 2:
-1) Sense the environment (see what changes occur naturally in the environment) - store it as state 0
-2) Take an action/reward - store as action 0 & reward 0
-
-In the next iteration
-1) Sense environment (see what changes occur naturally and from an action)
-2) Update the Q-table
-3) Take an action - get a reward
-4) Repeat
-"""
 
 class LearningAgent(Agent):
 	"""An agent that learns to drive in the smartcab world."""
 
-	counter = 0
+	start = True
+	q_values = {}
+	win = 0
 	
 	def __init__(self, env):
 		super(LearningAgent, self).__init__(env)  			# sets self.env = env, state = None, next_waypoint = None, and a default color
 		self.color = 'red'  								# override color
 		self.planner = RoutePlanner(self.env, self)  		# simple route planner to get next_waypoint
         # TODO: Initialize any additional variables here
-		self.counter = 0
 		
 	def reset(self, destination=None):
 		self.planner.route_to(destination)
@@ -85,19 +29,21 @@ class LearningAgent(Agent):
 		deadline = self.env.get_deadline(self)
 
         # TODO: Update state
-		if self.counter == 0:
-			# Initialize q-value table
-			self.counter = 1
+		if self.start == True:
+			self.q_values = self.initialize_qtable()
+			self.start = False
 		
 		updated = self.update_state(self.next_waypoint, inputs, deadline)
-		
-		choice = self.lookup_actions(updated)
+		choice, max_action = self.lookup_actions(updated)
 		
         # TODO: Select action according to your policy
 		action = choice
 
         # Execute action and get reward
 		reward = self.env.act(self, action)
+		if reward == 12:
+			self.win = self.win + 1
+			print self.win
 		
 		# TODO: Learn policy based on state, action, reward
 		print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
@@ -123,29 +69,89 @@ class LearningAgent(Agent):
 		
 		state = [light, oncoming, cross_traffic, next_waypoint, anarchy_time]
 		
-		return updated_state
+		return state
 		
 		
 	def lookup_actions(self, state):
-			
+		action = ["left", "forward", "right", None]	
+		q_vals_list = []
+		random_list = []
+		
 		light = state[0]
 		oncoming = state[1]
 		cross_traffic = state[2]
 		next_waypoint = state[3]
 		anarchy_time = state[4]
-			
-		tuple_state = (('light': light), ('oncoming': oncoming), ('cross_traffic': cross_traffic), 
-				       ('next_waypoint': next_waypoint), ('anarchy_time': anarchy_time))
-					  
-		q_vals = self.q_values(tuple_state)			  
 		
+		for each in action:	
+			q_val_state = (('light', light), ('oncoming', oncoming), ('cross_traffic', cross_traffic),
+						   ('next_waypoint', next_waypoint), ('anarchy_time', anarchy_time), each)
+			q_vals = self.q_values[q_val_state]
+			q_vals_list.append([q_vals, each])
+		max_action = max(q_vals_list)
+		
+		for each in q_vals_list:
+			if each[0] == 0:
+				random_list.append(each[1])
+		
+		if max_action[0] == 0:
+			choice = random.choice(action)
+		elif (len(random_list) > 0):
+			choice = random.choice(random_list)
+		else:
+			choice = max_action[1]
+			
+		return choice, max_action
 			
 	def update_policy(self, state, action, reward):
-		# ...
+		actions = ["left","forward","left",None]
+		each_vals_list = []
+		alpha = 0.5
+		
+		light = state[0]
+		oncoming = state[1]
+		cross_traffic = state[2]
+		next_waypoint = state[3]
+		anarchy_time = state[4]
+		
+		q_val_state = (('light', light), ('oncoming', oncoming), ('cross_traffic', cross_traffic),
+					   ('next_waypoint', next_waypoint), ('anarchy_time', anarchy_time), action)
+		
+		self.next_waypoint = self.planner.next_waypoint()
+		inputs = self.env.sense(self)
+		deadline = self.env.get_deadline(self)
+		updated = self.update_state(self.next_waypoint, inputs, deadline)
+		choice, max_action = self.lookup_actions(updated)
+		
+		new_value = reward + (alpha * max_action[0])
+		
+		self.q_values[q_val_state] = new_value
+		
+	def initialize_qtable(self):
+		light = ["red","green"]
+		oncoming = ["left","forward","right",None]
+		cross_traffic = [True, False]
+		next_waypoint = ["left", "forward", "right", None]
+		anarchy_time = [True, False]
+		action = ["left", "forward", "right", None]
 	
-	def q_values(self, state, action=None):
-		# ...
-
+		q_values = {}
+		state_list = []	
+		for each_light in light:
+			for each_oncoming in oncoming:
+				for each_cross_traffic in cross_traffic:
+					for each_next_waypoint in next_waypoint:
+						for each_anarchy_time in anarchy_time:
+							for each_action in action:
+								state = (('light', each_light), ('oncoming', each_oncoming), 
+										 ('cross_traffic', each_cross_traffic),('next_waypoint', each_next_waypoint),
+										 ('anarchy_time', each_anarchy_time), each_action)
+								state_list.append(state)
+						
+		for each in state_list:
+			q_values[each] = 0
+			
+		return q_values
 
 def run():
     """Run the agent for a finite number of trials."""
@@ -156,8 +162,8 @@ def run():
     e.set_primary_agent(a, enforce_deadline=True)  		# set agent to track
 
     # Now simulate it
-    sim = Simulator(e, update_delay=0.3)  				# reduce update_delay to speed up simulation
-    sim.run(n_trials=10)  								# press Esc or close pygame window to quit
+    sim = Simulator(e, update_delay=0.1)  				# reduce update_delay to speed up simulation
+    sim.run(n_trials=100)  								# press Esc or close pygame window to quit
 
 
 if __name__ == '__main__':
