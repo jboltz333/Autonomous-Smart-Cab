@@ -1,4 +1,5 @@
 import random
+from math import exp
 from environment import Agent, Environment
 from planner import RoutePlanner
 from simulator import Simulator
@@ -10,6 +11,8 @@ class LearningAgent(Agent):
 	start = True
 	q_values = {}
 	win = 0
+	count = 0
+	T = 110
 	
 	def __init__(self, env):
 		super(LearningAgent, self).__init__(env)  			# sets self.env = env, state = None, next_waypoint = None, and a default color
@@ -21,6 +24,11 @@ class LearningAgent(Agent):
 		self.planner.route_to(destination)
         # TODO: Prepare for a new trip; 
 		#		reset any variables here, if required
+		
+		#Avoiding a range limit that keeps happening around 99
+		#due to the number being too large
+		self.T = self.T/1.1
+		self.count = self.count + 1 
 		
 	def update(self, t):
         # Gather inputs
@@ -90,6 +98,39 @@ class LearningAgent(Agent):
 			q_vals_list.append([q_vals, each])
 		max_action = max(q_vals_list)
 		
+		if self.count < 90:
+			#Boltmann method
+			prob_list = []
+			q_sum_exp = exp(q_vals_list[0][0]/self.T) + exp(q_vals_list[1][0]/self.T) +	exp(\
+							q_vals_list[2][0]/self.T) + exp(q_vals_list[3][0]/self.T)
+			for each in q_vals_list:
+				boltzmann = exp(each[0]/self.T)/q_sum_exp
+				prob_list.append([boltzmann, each[1]])
+				
+			a = [prob_list[0][0], prob_list[0][1]] 
+			b = [prob_list[1][0], prob_list[1][1]] 
+			c = [prob_list[2][0], prob_list[2][1]] 
+			d = [prob_list[3][0], prob_list[3][1]] 
+			q_range = [a,[b[0]+a[0], b[1]], [c[0]+b[0]+a[0], c[1]], [1,d[1]]]
+				
+			x = random.uniform(0,1)
+				
+			if x <= q_range[0][0]:
+				choice = q_range[0][1]
+			elif q_range[0][0] < x <= q_range[1][0]:
+				choice = q_range[1][1]
+			elif q_range[1][0] < x <= q_range[2][0]:
+				choice = q_range[2][1]
+			else:
+				choice = q_range[3][1]
+			###
+		else:
+			choice = max_action[1]
+		
+		# I tried two different choice methods, the first being the commented out 
+		# section below, and the second, better method was the Boltzmann method
+		# above.
+		"""	
 		for each in q_vals_list:
 			if each[0] == 0:
 				random_list.append(each[1])
@@ -100,12 +141,14 @@ class LearningAgent(Agent):
 			choice = random.choice(random_list)
 		else:
 			choice = max_action[1]
+		"""
 			
 		return choice, max_action
 			
 	def update_policy(self, state, action, reward):
 		actions = ["left","forward","left",None]
 		each_vals_list = []
+		discount = 0.5
 		alpha = 0.5
 		
 		light = state[0]
@@ -117,13 +160,14 @@ class LearningAgent(Agent):
 		q_val_state = (('light', light), ('oncoming', oncoming), ('cross_traffic', cross_traffic),
 					   ('next_waypoint', next_waypoint), ('anarchy_time', anarchy_time), action)
 		
+		q_state = self.q_values[q_val_state]
 		self.next_waypoint = self.planner.next_waypoint()
 		inputs = self.env.sense(self)
 		deadline = self.env.get_deadline(self)
 		updated = self.update_state(self.next_waypoint, inputs, deadline)
-		choice, max_action = self.lookup_actions(updated)
+		choice, max_action = self.lookup_actions(updated) 
 		
-		new_value = reward + (alpha * max_action[0])
+		new_value = q_state*(1-alpha) + alpha*(reward + (discount * max_action[0]))
 		
 		self.q_values[q_val_state] = new_value
 		
@@ -162,7 +206,7 @@ def run():
 	e.set_primary_agent(a, enforce_deadline=True)  		# set agent to track
 
     # Now simulate it
-	sim = Simulator(e, update_delay=0.1)  				# reduce update_delay to speed up simulation
+	sim = Simulator(e, update_delay=0.01)  				# reduce update_delay to speed up simulation
 	sim.run(n_trials=100)  								# press Esc or close pygame window to quit
 	
 
