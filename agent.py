@@ -7,18 +7,20 @@ from simulator import Simulator
 
 class LearningAgent(Agent):
 	"""An agent that learns to drive in the smartcab world."""
-
-	start = True
-	q_values = {}
-	win = 0
-	count = 0
-	T = 110
 	
 	def __init__(self, env):
 		super(LearningAgent, self).__init__(env)  			# sets self.env = env, state = None, next_waypoint = None, and a default color
 		self.color = 'red'  								# override color
 		self.planner = RoutePlanner(self.env, self)  		# simple route planner to get next_waypoint
         # TODO: Initialize any additional variables here
+		self.start = True
+		self.q_values = {}
+		self.win = 0
+		self.count = 0
+		self.T = 110
+		if self.start == True:
+			self.q_values = self.initialize_qtable()
+			self.start = False
 		
 	def reset(self, destination=None):
 		self.planner.route_to(destination)
@@ -37,11 +39,8 @@ class LearningAgent(Agent):
 		deadline = self.env.get_deadline(self)
 
         # TODO: Update state
-		if self.start == True:
-			self.q_values = self.initialize_qtable()
-			self.start = False
-		
 		updated = self.update_state(self.next_waypoint, inputs, deadline)
+		self.state = updated
 		choice, max_action = self.lookup_actions(updated)
 		
         # TODO: Select action according to your policy
@@ -65,17 +64,22 @@ class LearningAgent(Agent):
 		right = inputs['right']
 		light = inputs['light']
 		
-		if right == None and left == None:
-			cross_traffic = False
+		if right == None:
+			right = False
 		else:
-			cross_traffic = True
+			right = True
+		
+		if left == None:
+			left = False
+		else:
+			left = True
 		
 		if deadline <= 10:
 			anarchy_time = True
 		else:
 			anarchy_time = False
 		
-		state = [light, oncoming, cross_traffic, next_waypoint, anarchy_time]
+		state = [light, oncoming, left, right, next_waypoint, anarchy_time]
 		
 		return state
 		
@@ -87,13 +91,15 @@ class LearningAgent(Agent):
 		
 		light = state[0]
 		oncoming = state[1]
-		cross_traffic = state[2]
-		next_waypoint = state[3]
-		anarchy_time = state[4]
+		left = state[2]
+		right = state[3]
+		next_waypoint = state[4]
+		anarchy_time = state[5]
 		
 		for each in action:	
-			q_val_state = (('light', light), ('oncoming', oncoming), ('cross_traffic', cross_traffic),
-						   ('next_waypoint', next_waypoint), ('anarchy_time', anarchy_time), each)
+			q_val_state = (('light', light), ('oncoming', oncoming), ('left', left), 
+						   ('right', right), ('next_waypoint', next_waypoint), 
+						   ('anarchy_time', anarchy_time), each)
 			q_vals = self.q_values[q_val_state]
 			q_vals_list.append([q_vals, each])
 		max_action = max(q_vals_list)
@@ -153,11 +159,12 @@ class LearningAgent(Agent):
 		
 		light = state[0]
 		oncoming = state[1]
-		cross_traffic = state[2]
-		next_waypoint = state[3]
-		anarchy_time = state[4]
+		left = state[2]
+		right = state[3]
+		next_waypoint = state[4]
+		anarchy_time = state[5]
 		
-		q_val_state = (('light', light), ('oncoming', oncoming), ('cross_traffic', cross_traffic),
+		q_val_state = (('light', light), ('oncoming', oncoming), ('left', left), ('right', right),
 					   ('next_waypoint', next_waypoint), ('anarchy_time', anarchy_time), action)
 		
 		q_state = self.q_values[q_val_state]
@@ -174,7 +181,8 @@ class LearningAgent(Agent):
 	def initialize_qtable(self):
 		light = ["red","green"]
 		oncoming = ["left","forward","right",None]
-		cross_traffic = [True, False]
+		left = [True, False]
+		right = [True, False]
 		next_waypoint = ["left", "forward", "right", None]
 		anarchy_time = [True, False]
 		action = ["left", "forward", "right", None]
@@ -183,14 +191,16 @@ class LearningAgent(Agent):
 		state_list = []	
 		for each_light in light:
 			for each_oncoming in oncoming:
-				for each_cross_traffic in cross_traffic:
-					for each_next_waypoint in next_waypoint:
-						for each_anarchy_time in anarchy_time:
-							for each_action in action:
-								state = (('light', each_light), ('oncoming', each_oncoming), 
-										 ('cross_traffic', each_cross_traffic),('next_waypoint', each_next_waypoint),
-										 ('anarchy_time', each_anarchy_time), each_action)
-								state_list.append(state)
+				for each_left in left:
+					for each_right in right:
+						for each_next_waypoint in next_waypoint:
+							for each_anarchy_time in anarchy_time:
+								for each_action in action:
+									state = (('light', each_light), ('oncoming', each_oncoming), 
+											 ('left', each_left), ('right', each_right), 
+											 ('next_waypoint', each_next_waypoint),
+											 ('anarchy_time', each_anarchy_time), each_action)
+									state_list.append(state)
 						
 		for each in state_list:
 			q_values[each] = 0
