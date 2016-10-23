@@ -10,14 +10,20 @@ https://www.pygame.org/wiki/GettingStarted
 
 ## Code
 
-Open `smartcab/agent.py` and implement `LearningAgent`. Follow `TODO`s for further instructions.
+Open `agent.py` and implement `LearningAgent`.
 
 ## Run
 
-Make sure you are in the top-level project directory `smartcab/` (that contains this README). Then run:
+Make sure you are in the top-level project directory containing the four python files as 
+well as the images folder, then run:
 
-```python smartcab/agent.py```
+```python agent.py```
 
 OR:
 
-```python -m smartcab.agent```
+```python -m agent```
+
+LearningAgent is the only file you need to run to run this program, all other files are
+helper files that don't necessarily need to be adjusted at all. You may make changes in 
+any files you like but the file you should be most concerned with is just the learning
+agent file. This file is where the program really is adjustable from.
